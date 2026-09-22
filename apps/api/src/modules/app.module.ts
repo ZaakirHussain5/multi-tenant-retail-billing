@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 
+import { AuditModule } from "./audit/audit.module.js";
 import { BillingModule } from "./billing/billing.module.js";
 import { CatalogModule } from "./catalog/catalog.module.js";
 import { HealthModule } from "./health/health.module.js";
@@ -19,6 +20,7 @@ import { TenantModule } from "./tenancy/tenant.module.js";
     BillingModule,
     PurchasingModule,
     ReportingModule,
+    AuditModule,
   ],
 })
 export class AppModule {}
