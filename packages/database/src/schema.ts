@@ -665,6 +665,33 @@ export const goodsReceiptItems = pgTable(
   ],
 );
 
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    storeId: uuid("store_id").references(() => stores.id, {
+      onDelete: "restrict",
+    }),
+    category: varchar("category", { length: 100 }).notNull(),
+    description: text("description").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+    incurredAt: timestamp("incurred_at", { withTimezone: true }).notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("expenses_tenant_date_idx").on(table.tenantId, table.incurredAt),
+    check("expenses_amount_positive_check", sql`${table.amount} > 0`),
+  ],
+);
+
 export const tenantDomains = pgTable(
   "tenant_domains",
   {
