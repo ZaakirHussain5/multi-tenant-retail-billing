@@ -323,6 +323,9 @@ importers:
       "@retail/database":
         specifier: workspace:*
         version: link:../../packages/database
+      drizzle-orm:
+        specifier: ^0.45.1
+        version: 0.45.3(postgres@3.4.9)
       ioredis:
         specifier: ^5.8.1
         version: 5.11.1
