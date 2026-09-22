@@ -1,0 +1,27 @@
+{
+  "name": "multi-tenant-retail-billing",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @retail/database db:generate",
+    "db:migrate": "pnpm --filter @retail/database db:migrate",
+    "db:seed": "pnpm --filter @retail/database db:seed"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.8",
+    "typescript": "^5.9.3"
+  }
+}

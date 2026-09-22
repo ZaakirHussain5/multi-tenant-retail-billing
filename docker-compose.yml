@@ -1,0 +1,94 @@
+name: retail-billing
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: retail
+      POSTGRES_USER: retail
+      POSTGRES_PASSWORD: retail
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U retail -d retail"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: development
+    command: pnpm --filter @retail/api dev
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://retail:retail@postgres:5432/retail
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+      target: development
+    command: pnpm --filter @retail/worker dev
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://retail:retail@postgres:5432/retail
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: development
+    command: pnpm --filter @retail/web dev
+    env_file: .env
+    environment:
+      API_INTERNAL_URL: http://api:4000
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/workspace
+      - node_modules:/workspace/node_modules
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
+  node_modules:
