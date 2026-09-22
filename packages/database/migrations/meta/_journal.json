@@ -15,6 +15,13 @@
       "when": 1790073756984,
       "tag": "0001_marvelous_celestials",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790074213271,
+      "tag": "0002_keen_mikhail_rasputin",
+      "breakpoints": true
     }
   ]
 }

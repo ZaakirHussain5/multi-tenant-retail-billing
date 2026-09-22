@@ -25,6 +25,19 @@ export const inventoryMovementType = pgEnum("inventory_movement_type", [
   "transfer_out",
   "transfer_in",
 ]);
+export const invoiceStatus = pgEnum("invoice_status", [
+  "draft",
+  "finalized",
+  "cancelled",
+  "refunded",
+]);
+export const invoiceType = pgEnum("invoice_type", ["b2c", "b2b"]);
+export const paymentMethod = pgEnum("payment_method", [
+  "cash",
+  "card",
+  "upi",
+  "credit",
+]);
 
 export const tenants = pgTable(
   "tenants",
@@ -324,6 +337,163 @@ export const stockBalances = pgTable(
     }),
     index("stock_tenant_store_idx").on(table.tenantId, table.storeId),
     check("stock_nonnegative_check", sql`${table.quantity} >= 0`),
+  ],
+);
+
+export const invoiceSequences = pgTable(
+  "invoice_sequences",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    storeId: uuid("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    financialYear: varchar("financial_year", { length: 9 }).notNull(),
+    series: varchar("series", { length: 16 }).notNull(),
+    nextValue: integer("next_value").notNull().default(1),
+  },
+  (table) => [
+    primaryKey({
+      columns: [
+        table.tenantId,
+        table.storeId,
+        table.financialYear,
+        table.series,
+      ],
+    }),
+    check("invoice_sequence_positive_check", sql`${table.nextValue} > 0`),
+  ],
+);
+
+export const salesInvoices = pgTable(
+  "sales_invoices",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    storeId: uuid("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "restrict" }),
+    invoiceNumber: varchar("invoice_number", { length: 50 }).notNull(),
+    financialYear: varchar("financial_year", { length: 9 }).notNull(),
+    series: varchar("series", { length: 16 }).notNull(),
+    type: invoiceType("type").notNull(),
+    status: invoiceStatus("status").notNull().default("draft"),
+    customerName: varchar("customer_name", { length: 200 }),
+    customerGstin: varchar("customer_gstin", { length: 15 }),
+    placeOfSupply: varchar("place_of_supply", { length: 2 }).notNull(),
+    subtotal: numeric("subtotal", { precision: 18, scale: 2 }).notNull(),
+    discountTotal: numeric("discount_total", { precision: 18, scale: 2 })
+      .notNull()
+      .default("0"),
+    taxableTotal: numeric("taxable_total", {
+      precision: 18,
+      scale: 2,
+    }).notNull(),
+    cgstTotal: numeric("cgst_total", { precision: 18, scale: 2 })
+      .notNull()
+      .default("0"),
+    sgstTotal: numeric("sgst_total", { precision: 18, scale: 2 })
+      .notNull()
+      .default("0"),
+    igstTotal: numeric("igst_total", { precision: 18, scale: 2 })
+      .notNull()
+      .default("0"),
+    cessTotal: numeric("cess_total", { precision: 18, scale: 2 })
+      .notNull()
+      .default("0"),
+    roundOff: numeric("round_off", { precision: 18, scale: 2 })
+      .notNull()
+      .default("0"),
+    grandTotal: numeric("grand_total", { precision: 18, scale: 2 }).notNull(),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("invoice_business_number_uidx").on(
+      table.tenantId,
+      table.storeId,
+      table.financialYear,
+      table.series,
+      table.invoiceNumber,
+    ),
+    index("invoices_tenant_store_date_idx").on(
+      table.tenantId,
+      table.storeId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const salesInvoiceItems = pgTable(
+  "sales_invoice_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => salesInvoices.id, { onDelete: "cascade" }),
+    productVariantId: uuid("product_variant_id")
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "restrict" }),
+    productName: varchar("product_name", { length: 255 }).notNull(),
+    sku: varchar("sku", { length: 100 }).notNull(),
+    hsnSac: varchar("hsn_sac", { length: 16 }),
+    quantity: numeric("quantity", { precision: 18, scale: 3 }).notNull(),
+    unitPrice: numeric("unit_price", { precision: 18, scale: 2 }).notNull(),
+    discount: numeric("discount", { precision: 18, scale: 2 })
+      .notNull()
+      .default("0"),
+    taxableAmount: numeric("taxable_amount", {
+      precision: 18,
+      scale: 2,
+    }).notNull(),
+    gstRate: numeric("gst_rate", { precision: 7, scale: 4 }).notNull(),
+    cgst: numeric("cgst", { precision: 18, scale: 2 }).notNull().default("0"),
+    sgst: numeric("sgst", { precision: 18, scale: 2 }).notNull().default("0"),
+    igst: numeric("igst", { precision: 18, scale: 2 }).notNull().default("0"),
+    cess: numeric("cess", { precision: 18, scale: 2 }).notNull().default("0"),
+    lineTotal: numeric("line_total", { precision: 18, scale: 2 }).notNull(),
+    unitCost: numeric("unit_cost", { precision: 18, scale: 4 }).notNull(),
+  },
+  (table) => [
+    index("invoice_items_tenant_invoice_idx").on(
+      table.tenantId,
+      table.invoiceId,
+    ),
+    check("invoice_item_quantity_check", sql`${table.quantity} > 0`),
+  ],
+);
+
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => salesInvoices.id, { onDelete: "restrict" }),
+    method: paymentMethod("method").notNull(),
+    amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+    reference: varchar("reference", { length: 120 }),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("payments_tenant_invoice_idx").on(table.tenantId, table.invoiceId),
+    check("payment_amount_positive_check", sql`${table.amount} > 0`),
   ],
 );
 
