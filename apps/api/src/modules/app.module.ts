@@ -5,6 +5,7 @@ import { CatalogModule } from "./catalog/catalog.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
 import { InventoryModule } from "./inventory/inventory.module.js";
+import { PurchasingModule } from "./purchasing/purchasing.module.js";
 import { TenantModule } from "./tenancy/tenant.module.js";
 
 @Module({
@@ -15,6 +16,7 @@ import { TenantModule } from "./tenancy/tenant.module.js";
     CatalogModule,
     InventoryModule,
     BillingModule,
+    PurchasingModule,
   ],
 })
 export class AppModule {}

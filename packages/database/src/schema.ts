@@ -38,6 +38,16 @@ export const paymentMethod = pgEnum("payment_method", [
   "upi",
   "credit",
 ]);
+export const purchaseOrderStatus = pgEnum("purchase_order_status", [
+  "draft",
+  "pending_approval",
+  "approved",
+  "sent",
+  "partially_received",
+  "received",
+  "closed",
+  "cancelled",
+]);
 
 export const tenants = pgTable(
   "tenants",
@@ -494,6 +504,164 @@ export const payments = pgTable(
   (table) => [
     index("payments_tenant_invoice_idx").on(table.tenantId, table.invoiceId),
     check("payment_amount_positive_check", sql`${table.amount} > 0`),
+  ],
+);
+
+export const suppliers = pgTable(
+  "suppliers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 200 }).notNull(),
+    gstin: varchar("gstin", { length: 15 }),
+    email: varchar("email", { length: 320 }),
+    phone: varchar("phone", { length: 32 }),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("suppliers_tenant_name_idx").on(table.tenantId, table.name),
+  ],
+);
+
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    storeId: uuid("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "restrict" }),
+    supplierId: uuid("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "restrict" }),
+    orderNumber: varchar("order_number", { length: 50 }).notNull(),
+    status: purchaseOrderStatus("status").notNull().default("draft"),
+    expectedDeliveryDate: timestamp("expected_delivery_date", {
+      withTimezone: true,
+    }),
+    notes: text("notes"),
+    subtotal: numeric("subtotal", { precision: 18, scale: 2 }).notNull(),
+    taxTotal: numeric("tax_total", { precision: 18, scale: 2 }).notNull(),
+    grandTotal: numeric("grand_total", { precision: 18, scale: 2 }).notNull(),
+    approvedBy: uuid("approved_by").references(() => users.id, {
+      onDelete: "restrict",
+    }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("purchase_orders_business_number_uidx").on(
+      table.tenantId,
+      table.orderNumber,
+    ),
+    index("purchase_orders_tenant_status_idx").on(table.tenantId, table.status),
+  ],
+);
+
+export const purchaseOrderItems = pgTable(
+  "purchase_order_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    purchaseOrderId: uuid("purchase_order_id")
+      .notNull()
+      .references(() => purchaseOrders.id, { onDelete: "cascade" }),
+    productVariantId: uuid("product_variant_id")
+      .notNull()
+      .references(() => productVariants.id, { onDelete: "restrict" }),
+    orderedQuantity: numeric("ordered_quantity", {
+      precision: 18,
+      scale: 3,
+    }).notNull(),
+    receivedQuantity: numeric("received_quantity", { precision: 18, scale: 3 })
+      .notNull()
+      .default("0"),
+    unitCost: numeric("unit_cost", { precision: 18, scale: 4 }).notNull(),
+    gstRate: numeric("gst_rate", { precision: 7, scale: 4 }).notNull(),
+  },
+  (table) => [
+    index("purchase_items_tenant_order_idx").on(
+      table.tenantId,
+      table.purchaseOrderId,
+    ),
+    check("purchase_item_quantity_check", sql`${table.orderedQuantity} > 0`),
+    check(
+      "purchase_item_received_check",
+      sql`${table.receivedQuantity} >= 0 AND ${table.receivedQuantity} <= ${table.orderedQuantity}`,
+    ),
+  ],
+);
+
+export const goodsReceipts = pgTable(
+  "goods_receipts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    purchaseOrderId: uuid("purchase_order_id")
+      .notNull()
+      .references(() => purchaseOrders.id, { onDelete: "restrict" }),
+    receiptNumber: varchar("receipt_number", { length: 50 }).notNull(),
+    receivedBy: uuid("received_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    notes: text("notes"),
+  },
+  (table) => [
+    uniqueIndex("goods_receipts_business_number_uidx").on(
+      table.tenantId,
+      table.receiptNumber,
+    ),
+    index("goods_receipts_tenant_order_idx").on(
+      table.tenantId,
+      table.purchaseOrderId,
+    ),
+  ],
+);
+
+export const goodsReceiptItems = pgTable(
+  "goods_receipt_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    goodsReceiptId: uuid("goods_receipt_id")
+      .notNull()
+      .references(() => goodsReceipts.id, { onDelete: "cascade" }),
+    purchaseOrderItemId: uuid("purchase_order_item_id")
+      .notNull()
+      .references(() => purchaseOrderItems.id, { onDelete: "restrict" }),
+    quantity: numeric("quantity", { precision: 18, scale: 3 }).notNull(),
+    unitCost: numeric("unit_cost", { precision: 18, scale: 4 }).notNull(),
+  },
+  (table) => [
+    index("receipt_items_tenant_receipt_idx").on(
+      table.tenantId,
+      table.goodsReceiptId,
+    ),
+    check("receipt_item_quantity_check", sql`${table.quantity} > 0`),
   ],
 );
 
